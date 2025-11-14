@@ -172,7 +172,10 @@ class LMSMediaPlayer(MediaPlayer):
                 _LOG.warning("Unsupported command: %s", cmd_id)
                 return StatusCodes.NOT_IMPLEMENTED
 
-            asyncio.create_task(self._deferred_update())
+            # Skip deferred update for volume commands - polling will catch them quickly
+            if cmd_id not in [Commands.VOLUME, Commands.VOLUME_UP, Commands.VOLUME_DOWN]:
+                asyncio.create_task(self._deferred_update())
+            
             return StatusCodes.OK
 
         except Exception as e:
@@ -199,7 +202,7 @@ class LMSMediaPlayer(MediaPlayer):
 
     async def _deferred_update(self):
         """Update attributes after a short delay."""
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
         await self.update_attributes()
 
     async def start_polling(self):
@@ -324,7 +327,9 @@ class LMSMediaPlayer(MediaPlayer):
             else:
                 self.attributes[Attributes.MEDIA_DURATION] = 0
 
-            if self.attributes[Attributes.STATE] in [States.PLAYING, States.PAUSED]:
+            # Fetch artwork if track info exists, regardless of play state
+            # This fixes the issue where stopped/paused players don't show artwork
+            if coverid:
                 artwork = await self._client.fetch_artwork_as_base64(self._player_id, coverid)
                 self.attributes[Attributes.MEDIA_IMAGE_URL] = artwork
             else:
