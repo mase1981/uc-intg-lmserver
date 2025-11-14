@@ -222,11 +222,11 @@ class LMSClient:
         volume = max(0, min(100, volume))
         await self.send_command(player_id, ["mixer", "volume", str(volume)])
 
-    async def volume_up(self, player_id: str, step: int = 5):
+    async def volume_up(self, player_id: str, step: int = 1):
         """Increase volume."""
         await self.send_command(player_id, ["mixer", "volume", f"+{step}"])
 
-    async def volume_down(self, player_id: str, step: int = 5):
+    async def volume_down(self, player_id: str, step: int = 1):
         """Decrease volume."""
         await self.send_command(player_id, ["mixer", "volume", f"-{step}"])
 
