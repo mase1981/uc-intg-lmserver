@@ -189,17 +189,24 @@ async def on_connect():
 
 
 async def on_disconnect():
-    """Handle disconnect event."""
-    _LOG.info("Remote disconnected")
+    """
+    Handle disconnect event.
+    
+    CRITICAL: DO NOT close the LMS client session here!
+    The client HTTP session must persist across Remote WebSocket reconnections.
+    Only stop the polling loops to pause entity updates during disconnect.
+    """
+    _LOG.info("Remote disconnected - stopping polling loops")
 
+    # Stop polling but keep client session alive
     for player in media_players.values():
         await player.stop_polling()
 
     for remote in remotes.values():
         await remote.stop_polling()
 
-    if client:
-        await client.close()
+    # DO NOT close the client session - it will be reused on reconnect
+    # The session is only closed during final shutdown in main()
 
 
 async def on_subscribe_entities(entity_ids: list[str]):
@@ -331,6 +338,7 @@ async def main():
         raise
     finally:
         _LOG.info("Shutting down...")
+        # Close client session only during final shutdown
         if client:
             await client.close()
 
