@@ -19,7 +19,7 @@ Control all your Squeezebox and compatible players connected to your Lyrion Musi
 This integration provides (almost) full control of all players connected to your Lyrion Music Server (formerly Logitech Media Server) with rich media information display, multi-room synchronization, and favorites access directly from your Unfolded Circle Remote.
 
 ---
-## 💰 Support Development
+## ❤️ Support Development ❤️
 
 If you find this integration useful, consider supporting development:
 
