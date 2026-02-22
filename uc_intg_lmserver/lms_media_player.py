@@ -44,6 +44,8 @@ class LMSMediaPlayer(MediaPlayer):
         self._integration_api = None
         self._polling_task: asyncio.Task | None = None
         self._polling_active = False
+        self._last_status: dict = {}
+        self._dependent_entities: list = []
 
         entity_id = self._sanitize_name(player_name)
 
@@ -267,28 +269,47 @@ class LMSMediaPlayer(MediaPlayer):
             self.attributes[Attributes.VOLUME] = status.get("mixer volume", 0)
             self.attributes[Attributes.MUTED] = status.get("mixer muting", 0) == 1
 
-            if "playlist_loop" in status and status["playlist_loop"]:
-                track = status["playlist_loop"][0]
-                
-                title = track.get("title", "")
-                artist = track.get("artist", "")
-                album = track.get("album", "")
-                coverid = track.get("coverid", "")
+            current_track = None
+            is_remote = False
+
+            if "remoteMeta" in status:
+                current_track = status["remoteMeta"]
+                is_remote = True
+                _LOG.debug("Using remoteMeta for track info (remote/UPnP/DLNA stream)")
+            elif "playlist_loop" in status and status["playlist_loop"]:
+                current_track = status["playlist_loop"][0]
+                is_remote = current_track.get("remote", 0) == 1
+
+            if current_track:
+                title = current_track.get("title", "")
+                artist = current_track.get("artist", "")
+                album = current_track.get("album", "")
+
+                if not title and is_remote:
+                    title = current_track.get("remote_title", "")
 
                 self.attributes[Attributes.MEDIA_TITLE] = title
                 self.attributes[Attributes.MEDIA_ARTIST] = artist
                 self.attributes[Attributes.MEDIA_ALBUM] = album
 
-                # CRITICAL FIX: Use artwork URL instead of base64 to avoid WebSocket payload size limit
-                if coverid:
-                    artwork_url = self._client.get_artwork_url(self._player_id, coverid)
-                    self.attributes[Attributes.MEDIA_IMAGE_URL] = artwork_url
+                artwork_url_from_track = current_track.get("artwork_url", "")
+                coverid = current_track.get("coverid", "")
+
+                if artwork_url_from_track or coverid:
+                    final_artwork_url = self._client.get_artwork_url(
+                        self._player_id,
+                        coverid=str(coverid) if coverid else None,
+                        artwork_url=artwork_url_from_track
+                    )
+                    self.attributes[Attributes.MEDIA_IMAGE_URL] = final_artwork_url
                 else:
                     self.attributes[Attributes.MEDIA_IMAGE_URL] = ""
 
-                _LOG.info("State update for %s: state=%s, vol=%d, title='%s', artist='%s', album='%s'",
-                         self.id, new_state, self.attributes[Attributes.VOLUME],
-                         title, artist, album)
+                _LOG.info(
+                    "State update for %s: state=%s, vol=%d, title='%s', artist='%s', remote=%s",
+                    self.id, new_state, self.attributes[Attributes.VOLUME],
+                    title, artist, is_remote
+                )
             else:
                 self.attributes[Attributes.MEDIA_TITLE] = ""
                 self.attributes[Attributes.MEDIA_ARTIST] = ""
@@ -312,6 +333,9 @@ class LMSMediaPlayer(MediaPlayer):
 
             self._force_integration_update()
 
+            self._last_status = status
+            self._notify_dependent_entities()
+
         except Exception as e:
             _LOG.error("Failed to update attributes for %s: %s", self.id, e, exc_info=True)
             self.attributes[Attributes.STATE] = States.UNAVAILABLE
@@ -321,3 +345,23 @@ class LMSMediaPlayer(MediaPlayer):
     def player_id(self) -> str:
         """Get LMS player ID (MAC address)."""
         return self._player_id
+
+    @property
+    def last_status(self) -> dict:
+        """Get last player status for sensor updates."""
+        return self._last_status
+
+    def register_dependent_entity(self, entity) -> None:
+        """Register an entity that should be updated when media player status changes."""
+        if entity not in self._dependent_entities:
+            self._dependent_entities.append(entity)
+            _LOG.debug("Registered dependent entity: %s", entity.id)
+
+    def _notify_dependent_entities(self) -> None:
+        """Notify all dependent entities of status changes."""
+        for entity in self._dependent_entities:
+            if hasattr(entity, "update_from_status"):
+                try:
+                    entity.update_from_status(self._last_status)
+                except Exception as e:
+                    _LOG.debug("Failed to update dependent entity %s: %s", entity.id, e)

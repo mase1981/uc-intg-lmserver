@@ -28,6 +28,15 @@ from uc_intg_lmserver.config import LMSConfig
 from uc_intg_lmserver.lms_client import LMSClient
 from uc_intg_lmserver.lms_media_player import LMSMediaPlayer
 from uc_intg_lmserver.lms_remote import LMSRemote
+from uc_intg_lmserver.lms_sensor import (
+    LMSPlaybackStateSensor,
+    LMSSourceTypeSensor,
+    LMSVolumeSensor,
+)
+from uc_intg_lmserver.lms_select import (
+    LMSRepeatModeSelect,
+    LMSShuffleModeSelect,
+)
 from uc_intg_lmserver.setup_flow import SetupFlow
 
 _LOG = logging.getLogger(__name__)
@@ -37,6 +46,8 @@ config: LMSConfig | None = None
 client: LMSClient | None = None
 media_players: dict[str, LMSMediaPlayer] = {}
 remotes: dict[str, LMSRemote] = {}
+sensors: dict[str, list] = {}
+selects: dict[str, list] = {}
 entities_ready: bool = False
 initialization_lock = asyncio.Lock()
 setup_flow: SetupFlow | None = None
@@ -78,7 +89,7 @@ async def _initialize_entities() -> bool:
 
     :return: True if initialization successful
     """
-    global media_players, remotes, entities_ready, client, api
+    global media_players, remotes, sensors, selects, entities_ready, client, api
 
     async with initialization_lock:
         if entities_ready:
@@ -95,6 +106,8 @@ async def _initialize_entities() -> bool:
         api.available_entities.clear()
         media_players.clear()
         remotes.clear()
+        sensors.clear()
+        selects.clear()
 
         client = LMSClient(config.server_host, config.server_port)
 
@@ -157,13 +170,46 @@ async def _initialize_entities() -> bool:
                 api.configured_entities.add(remote)
                 _LOG.info("Added remote entity: %s with %d favorites", remote.id, len(favorites))
 
+                player_sensors = [
+                    LMSSourceTypeSensor(player_id, player_name),
+                    LMSVolumeSensor(player_id, player_name),
+                    LMSPlaybackStateSensor(player_id, player_name),
+                ]
+
+                for sensor in player_sensors:
+                    sensor._integration_api = api
+                    api.available_entities.add(sensor)
+                    api.configured_entities.add(sensor)
+                    media_player.register_dependent_entity(sensor)
+
+                sensors[player_id] = player_sensors
+                _LOG.info("Added %d sensor entities for player: %s", len(player_sensors), player_name)
+
+                player_selects = [
+                    LMSRepeatModeSelect(player_id, player_name, client),
+                    LMSShuffleModeSelect(player_id, player_name, client),
+                ]
+
+                for select in player_selects:
+                    select._integration_api = api
+                    api.available_entities.add(select)
+                    api.configured_entities.add(select)
+                    media_player.register_dependent_entity(select)
+
+                selects[player_id] = player_selects
+                _LOG.info("Added %d select entities for player: %s", len(player_selects), player_name)
+
             except Exception as e:
                 _LOG.error("Failed to create entities for player %s: %s", player_name, e, exc_info=True)
                 continue
 
         entities_ready = True
-        _LOG.info("Entity initialization complete: %d media players, %d remotes", 
-                 len(media_players), len(remotes))
+        total_sensors = sum(len(s) for s in sensors.values())
+        total_selects = sum(len(s) for s in selects.values())
+        _LOG.info(
+            "Entity initialization complete: %d media players, %d remotes, %d sensors, %d selects",
+            len(media_players), len(remotes), total_sensors, total_selects
+        )
 
         await api.set_device_state(DeviceStates.CONNECTED)
         return True
@@ -234,28 +280,58 @@ async def on_subscribe_entities(entity_ids: list[str]):
 
     subscribed_count = 0
     for entity_id in entity_ids:
-        for player in media_players.values():
+        for player_id, player in media_players.items():
             if player.id == entity_id:
                 _LOG.info("Subscribing media player: %s", entity_id)
-                
+
                 await player.update_attributes()
-                
+
+                if player_id in sensors:
+                    for sensor in sensors[player_id]:
+                        sensor.update_from_status(player.last_status)
+
+                if player_id in selects:
+                    for select in selects[player_id]:
+                        select.update_from_status(player.last_status)
+
                 await player.start_polling()
-                
+
                 subscribed_count += 1
                 break
 
         for remote in remotes.values():
             if remote.id == entity_id:
                 _LOG.info("Subscribing remote: %s", entity_id)
-                
+
                 await remote.update_sync_status()
-                
+
                 await remote.start_polling()
-                
+
                 subscribed_count += 1
                 break
-    
+
+        for player_id, player_sensors in sensors.items():
+            for sensor in player_sensors:
+                if sensor.id == entity_id:
+                    _LOG.info("Subscribing sensor: %s", entity_id)
+                    if player_id in media_players:
+                        player = media_players[player_id]
+                        if player.last_status:
+                            sensor.update_from_status(player.last_status)
+                    subscribed_count += 1
+                    break
+
+        for player_id, player_selects in selects.items():
+            for select in player_selects:
+                if select.id == entity_id:
+                    _LOG.info("Subscribing select: %s", entity_id)
+                    if player_id in media_players:
+                        player = media_players[player_id]
+                        if player.last_status:
+                            select.update_from_status(player.last_status)
+                    subscribed_count += 1
+                    break
+
     _LOG.info(f"Subscribed to {subscribed_count}/{len(entity_ids)} entities with initial state pushed")
 
 
@@ -279,6 +355,18 @@ async def on_unsubscribe_entities(entity_ids: list[str]):
                 _LOG.info("Stopping polling for remote: %s", entity_id)
                 await remote.stop_polling()
                 break
+
+        for player_sensors in sensors.values():
+            for sensor in player_sensors:
+                if sensor.id == entity_id:
+                    _LOG.info("Unsubscribed sensor: %s", entity_id)
+                    break
+
+        for player_selects in selects.values():
+            for select in player_selects:
+                if select.id == entity_id:
+                    _LOG.info("Unsubscribed select: %s", entity_id)
+                    break
 
 
 async def main():
