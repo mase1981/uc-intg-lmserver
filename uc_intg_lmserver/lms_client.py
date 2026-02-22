@@ -124,35 +124,63 @@ class LMSClient:
 
         :param player_id: Player MAC address
         :return: Player status dictionary
+
+        Tags used:
+        - A: artist (uppercase)
+        - a: artist (lowercase)
+        - l: album
+        - t: title
+        - d: duration
+        - c: coverid (local library artwork)
+        - K: artwork_url (remote streams provide full HTTP URL)
+        - x: remote (1 if remote stream/UPnP/DLNA)
+        - N: remote_title (station name for streaming)
         """
-        # Tags: A=artist (uppercase!), l=album, t=title, d=duration, c=coverid, K=artwork_url
         result = await self.send_command(
-            player_id, 
-            ["status", "-", "1", "tags:Aaltdc"]
+            player_id,
+            ["status", "-", "1", "tags:AaltdcKxN"]
         )
-        
+
         response = result.get("result", {})
-        
-        if "playlist_loop" in response and response["playlist_loop"]:
+
+        if "remoteMeta" in response:
+            track = response["remoteMeta"]
+            _LOG.debug("Remote stream metadata - Title: %s, Artist: %s, remote_title: %s",
+                      track.get("title"), track.get("artist"), track.get("remote_title"))
+        elif "playlist_loop" in response and response["playlist_loop"]:
             track = response["playlist_loop"][0]
-            _LOG.info("Track metadata - Title: %s, Artist: %s, Album: %s, CoverID: %s", 
-                     track.get("title"), track.get("artist"), 
-                     track.get("album"), track.get("coverid"))
-        
+            is_remote = track.get("remote", 0) == 1
+            _LOG.debug("Track metadata - Title: %s, Artist: %s, Album: %s, Remote: %s",
+                      track.get("title"), track.get("artist"),
+                      track.get("album"), is_remote)
+
         return response
 
-    def get_artwork_url(self, player_id: str, coverid: str = None) -> str:
+    def get_artwork_url(
+        self, player_id: str, coverid: str = None, artwork_url: str = None
+    ) -> str:
         """
         Get URL for track artwork.
 
+        Priority:
+        1. artwork_url - Remote streams provide full HTTP URL
+        2. coverid - Local library tracks use cover ID
+        3. Fallback - Use current/cover endpoint
+
         :param player_id: Player MAC address
         :param coverid: Optional cover ID from track metadata
-        :return: Artwork URL or empty string
+        :param artwork_url: Optional artwork URL from remote streams
+        :return: Artwork URL
         """
+        if artwork_url:
+            if artwork_url.startswith("http"):
+                return artwork_url
+            return f"{self._base_url}{artwork_url}"
+
         if coverid:
             return f"{self._base_url}/music/{coverid}/cover.jpg"
-        else:
-            return f"{self._base_url}/music/current/cover.jpg?player={player_id}"
+
+        return f"{self._base_url}/music/current/cover.jpg?player={player_id}"
 
     async def fetch_artwork_as_base64(self, player_id: str, coverid: str = None) -> str:
         """

@@ -32,7 +32,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "ucapi>=0.3.1",
+    "ucapi>=0.5.2",
     "aiohttp>=3.9.0",
 ]
 dynamic = ["version"]
