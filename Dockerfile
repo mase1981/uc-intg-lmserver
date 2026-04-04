@@ -2,6 +2,7 @@ FROM python:3.11-slim-bullseye
 
 WORKDIR /app
 
+COPY ./lib ./lib
 COPY ./requirements.txt requirements.txt
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 RUN mkdir /config
@@ -17,4 +18,4 @@ ENV UC_INTEGRATION_HTTP_PORT="9090"
 ENV UC_CONFIG_HOME="/config"
 LABEL org.opencontainers.image.source https://github.com/mase1981/uc-intg-lmserver
 
-CMD ["python3", "-u", "uc_intg_lmserver/driver.py"]
+CMD ["python3", "-u", "-m", "uc_intg_lmserver"]
