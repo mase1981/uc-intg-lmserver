@@ -1,7 +1,7 @@
 {
   "driver_id": "lmserver",
-  "version": "1.1.0",
-  "min_core_api": "0.21.0",
+  "version": "2.0.0",
+  "min_core_api": "0.22.0",
   "name": {
     "en": "Lyrion Music Server",
     "de": "Lyrion Music Server",
@@ -9,16 +9,16 @@
   },
   "icon": "uc:music-note",
   "description": {
-    "en": "Integration for Lyrion Music Server (formerly Logitech Media Server) supporting multiple Squeezebox and compatible players with synchronization.",
-    "de": "Integration für Lyrion Music Server (früher Logitech Media Server) mit Unterstützung für mehrere Squeezebox und kompatible Player mit Synchronisation.",
-    "fr": "Intégration pour Lyrion Music Server (anciennement Logitech Media Server) prenant en charge plusieurs lecteurs Squeezebox et compatibles avec synchronisation."
+    "en": "Integration for Lyrion Music Server (formerly Logitech Media Server) supporting multiple Squeezebox and compatible players with synchronization, media browsing, and full playback control.",
+    "de": "Integration für Lyrion Music Server (früher Logitech Media Server) mit Unterstützung für mehrere Squeezebox und kompatible Player mit Synchronisation, Medienbrowsing und voller Wiedergabesteuerung.",
+    "fr": "Intégration pour Lyrion Music Server (anciennement Logitech Media Server) prenant en charge plusieurs lecteurs Squeezebox et compatibles avec synchronisation, navigation multimédia et contrôle complet de la lecture."
   },
   "developer": {
     "name": "Meir Miyara",
     "email": "meir.miyara@gmail.com",
     "url": "https://github.com/mase1981"
   },
-  "homepage": "https://github.com/mase1981/uc-intg-heos",
+  "home_page": "https://github.com/mase1981/uc-intg-lmserver",
   "setup_data_schema": {
     "title": {
       "en": "Lyrion Music Server Setup"
@@ -32,12 +32,12 @@
         "field": {
           "label": {
             "value": {
-              "en": "This integration connects to your Lyrion Music Server (LMS) to control all your Squeezebox and compatible players.\n\nYou'll need:\n• IP address of your LMS server\n• LMS HTTP port (default: 9000)\n\nAll players connected to your LMS will be automatically discovered and available as separate media player entities with full playback control and multi-room synchronization."
+              "en": "This integration connects to your Lyrion Music Server (LMS) to control all your Squeezebox and compatible players.\n\nYou'll need:\n• IP address of your LMS server\n• LMS HTTP port (default: 9000)\n\nAll players connected to your LMS will be automatically discovered."
             }
           }
         }
       }
     ]
   },
-  "release_date": "2025-01-01"
+  "release_date": "2026-04-04"
 }
