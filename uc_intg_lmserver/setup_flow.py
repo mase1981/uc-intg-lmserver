@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any
 
-from ucapi import RequestUserInput, SetupAction
+from ucapi import RequestUserInput, SetupAction, UserDataResponse
 from ucapi_framework import BaseSetupFlow
 
 from uc_intg_lmserver.client import LMSClient
@@ -23,24 +23,11 @@ _LOG = logging.getLogger(__name__)
 
 class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
 
-    async def get_pre_discovery_screen(self) -> RequestUserInput | None:
-        return self.get_manual_entry_form()
-
-    async def _handle_discovery(self) -> SetupAction:
-        if self._pre_discovery_data:
-            host = self._pre_discovery_data.get("host")
-            if not host:
-                return self.get_manual_entry_form()
-            try:
-                result = await self.query_device(self._pre_discovery_data)
-                if hasattr(result, "identifier"):
-                    return await self._finalize_device_setup(result, self._pre_discovery_data)
-                return result
-            except Exception as err:
-                _LOG.error("Discovery failed: %s", err)
-                return self.get_manual_entry_form()
-
-        return await self._handle_manual_entry()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._discovered_players: list[dict] = []
+        self._setup_host: str = ""
+        self._setup_port: int = DEFAULT_PORT
 
     def get_manual_entry_form(self) -> RequestUserInput:
         return RequestUserInput(
@@ -61,11 +48,7 @@ class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
 
     async def query_device(
         self, input_values: dict[str, Any]
-    ) -> LMServerConfig | RequestUserInput:
-        players_json = input_values.get("_players", "")
-        if players_json:
-            return self._finalize_player_selection(input_values, players_json)
-
+    ) -> LMServerConfig | SetupAction | RequestUserInput:
         host = (input_values.get("host") or "").strip()
         port_str = (input_values.get("port") or "").strip()
 
@@ -101,7 +84,22 @@ class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
             if not players:
                 raise ValueError("No players found on LMS server")
 
-            return self._create_player_selection_form(host, port, players)
+            self._discovered_players = players
+            self._setup_host = host
+            self._setup_port = port
+
+            identifier = f"lms_{host.replace('.', '_')}_{port}"
+            server_name = f"Lyrion Music Server ({host})"
+
+            self._pending_device_config = LMServerConfig(
+                identifier=identifier,
+                name=server_name,
+                host=host,
+                port=port,
+                players=[],
+            )
+
+            return self._create_player_selection_form(players)
 
         except Exception as err:
             _LOG.error("Setup failed: %s", err)
@@ -110,16 +108,8 @@ class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
         finally:
             await client.disconnect()
 
-    def _create_player_selection_form(
-        self, host: str, port: int, players: list[dict]
-    ) -> RequestUserInput:
-        settings: list[dict] = [
-            {
-                "id": "_players",
-                "label": {"en": ""},
-                "field": {"text": {"value": json.dumps({"host": host, "port": port, "players": players})}},
-            },
-        ]
+    def _create_player_selection_form(self, players: list[dict]) -> RequestUserInput:
+        settings: list[dict] = []
 
         for idx, player in enumerate(players):
             name = player.get("name", f"Player {idx + 1}")
@@ -137,25 +127,16 @@ class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
             settings,
         )
 
-    def _finalize_player_selection(
-        self, input_values: dict[str, Any], players_json: str
-    ) -> LMServerConfig:
-        try:
-            data = json.loads(players_json)
-        except (json.JSONDecodeError, TypeError):
-            raise ValueError("Invalid player data")
-
-        host = data.get("host", "")
-        port = data.get("port", DEFAULT_PORT)
-        all_players = data.get("players", [])
-
+    async def handle_additional_configuration_response(
+        self, msg: UserDataResponse
+    ) -> LMServerConfig | None:
         selected = []
-        for key, value in input_values.items():
+        for key, value in msg.input_values.items():
             if key.startswith("player_") and value:
                 try:
                     idx = int(key.replace("player_", ""))
-                    if idx < len(all_players):
-                        p = all_players[idx]
+                    if idx < len(self._discovered_players):
+                        p = self._discovered_players[idx]
                         selected.append({
                             "player_id": p.get("playerid", ""),
                             "name": p.get("name", ""),
@@ -167,15 +148,12 @@ class LMServerSetupFlow(BaseSetupFlow[LMServerConfig]):
         if not selected:
             raise ValueError("No players selected")
 
-        identifier = f"lms_{host.replace('.', '_')}_{port}"
-        server_name = f"Lyrion Music Server ({host})"
+        self._pending_device_config.players = selected
 
-        _LOG.info("Setup complete: %s with %d player(s)", server_name, len(selected))
-
-        return LMServerConfig(
-            identifier=identifier,
-            name=server_name,
-            host=host,
-            port=port,
-            players=selected,
+        _LOG.info(
+            "Setup complete: %s with %d player(s)",
+            self._pending_device_config.name,
+            len(selected),
         )
+
+        return None
