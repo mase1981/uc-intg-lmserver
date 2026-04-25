@@ -1,6 +1,6 @@
 {
   "driver_id": "lmserver",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "min_core_api": "0.22.0",
   "name": {
     "en": "Lyrion Music Server",
@@ -39,5 +39,5 @@
       }
     ]
   },
-  "release_date": "2026-04-04"
+  "release_date": "2026-04-25"
 }

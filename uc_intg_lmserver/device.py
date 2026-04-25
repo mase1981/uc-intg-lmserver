@@ -127,7 +127,7 @@ class LMServerDevice(ExternalClientDevice):
         await self._client.disconnect()
 
     def check_client_connected(self) -> bool:
-        return self._client.is_connected
+        return self._client is not None and self._client.is_connected
 
     # --- Polling ---
 
