@@ -102,14 +102,13 @@ async def search(
         ))
 
     for album in result.get("albums_loop", []):
-        art_id = str(album.get("artwork_track_id", ""))
         items.append(BrowseMediaItem(
             title=album.get("album", ""),
             subtitle=album.get("artist", ""),
             media_class=MediaClass.ALBUM,
             media_type="album",
             media_id=str(album.get("album_id", "")),
-            thumbnail=client.get_album_artwork_url(art_id) if art_id else "",
+            thumbnail=_thumbnail(client, album.get("artwork_track_id")),
             can_browse=True,
             can_play=True,
         ))
@@ -135,6 +134,10 @@ async def search(
         media=items,
         pagination=Pagination(page=page, limit=PAGE_SIZE, count=total),
     )
+
+
+def _thumbnail(client, artwork_id: str | int | None) -> str | None:
+    return client.get_album_artwork_url(str(artwork_id)) if artwork_id else None
 
 
 def _get_page(options: BrowseOptions) -> int:
@@ -239,14 +242,13 @@ async def _browse_artist_albums(
 
     items = []
     for album in result.get("albums_loop", []):
-        art_id = str(album.get("artwork_track_id", ""))
         items.append(BrowseMediaItem(
             title=album.get("album", "Unknown Album"),
             subtitle=album.get("artist", ""),
             media_class=MediaClass.ALBUM,
             media_type="album",
             media_id=str(album.get("id", "")),
-            thumbnail=client.get_album_artwork_url(art_id) if art_id else "",
+            thumbnail=_thumbnail(client, album.get("artwork_track_id")),
             can_browse=True,
             can_play=True,
         ))
@@ -272,14 +274,13 @@ async def _browse_albums(device: LMServerDevice, page: int) -> BrowseResults:
 
     items = []
     for album in result.get("albums_loop", []):
-        art_id = str(album.get("artwork_track_id", ""))
         items.append(BrowseMediaItem(
             title=album.get("album", "Unknown Album"),
             subtitle=album.get("artist", ""),
             media_class=MediaClass.ALBUM,
             media_type="album",
             media_id=str(album.get("id", "")),
-            thumbnail=client.get_album_artwork_url(art_id) if art_id else "",
+            thumbnail=_thumbnail(client, album.get("artwork_track_id")),
             can_browse=True,
             can_play=True,
         ))
@@ -307,14 +308,13 @@ async def _browse_album_tracks(
 
     items = []
     for track in result.get("titles_loop", []):
-        coverid = str(track.get("coverid", ""))
         items.append(BrowseMediaItem(
             title=track.get("title", "Unknown Track"),
             subtitle=track.get("artist", ""),
             media_class=MediaClass.TRACK,
             media_type="track",
             media_id=str(track.get("id", "")),
-            thumbnail=client.get_album_artwork_url(coverid) if coverid else "",
+            thumbnail=_thumbnail(client, track.get("coverid")),
             can_browse=False,
             can_play=True,
         ))
@@ -371,14 +371,13 @@ async def _browse_genre_albums(
 
     items = []
     for album in result.get("albums_loop", []):
-        art_id = str(album.get("artwork_track_id", ""))
         items.append(BrowseMediaItem(
             title=album.get("album", "Unknown Album"),
             subtitle=album.get("artist", ""),
             media_class=MediaClass.ALBUM,
             media_type="album",
             media_id=str(album.get("id", "")),
-            thumbnail=client.get_album_artwork_url(art_id) if art_id else "",
+            thumbnail=_thumbnail(client, album.get("artwork_track_id")),
             can_browse=True,
             can_play=True,
         ))
@@ -435,14 +434,13 @@ async def _browse_playlist_tracks(
 
     items = []
     for track in result.get("playlisttracks_loop", []):
-        coverid = str(track.get("coverid", ""))
         items.append(BrowseMediaItem(
             title=track.get("title", "Unknown Track"),
             subtitle=track.get("artist", ""),
             media_class=MediaClass.TRACK,
             media_type="track",
             media_id=str(track.get("id", "")),
-            thumbnail=client.get_album_artwork_url(coverid) if coverid else "",
+            thumbnail=_thumbnail(client, track.get("coverid")),
             can_browse=False,
             can_play=True,
         ))
