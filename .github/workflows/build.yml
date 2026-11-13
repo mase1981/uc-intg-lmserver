@@ -127,6 +127,8 @@ jobs:
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
+        with:
+          pattern: uc-intg-*
 
       - name: Extract build archives from downloaded files
         run: |
