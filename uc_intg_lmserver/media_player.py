@@ -11,8 +11,19 @@ import logging
 from typing import Any
 
 from ucapi import StatusCodes
-from ucapi.api_definitions import BrowseOptions, BrowseResults, SearchOptions, SearchResults
-from ucapi.media_player import Attributes, Commands, DeviceClasses, Features, MediaType, RepeatMode, States
+from ucapi.media_player import (
+    Attributes,
+    BrowseOptions,
+    BrowseResults,
+    Commands,
+    DeviceClasses,
+    Features,
+    MediaContentType,
+    RepeatMode,
+    SearchOptions,
+    SearchResults,
+    States,
+)
 from ucapi_framework import MediaPlayerEntity
 
 from uc_intg_lmserver import browser
@@ -131,7 +142,7 @@ class LMSMediaPlayer(MediaPlayerEntity):
             Attributes.MEDIA_IMAGE_URL: ps.get("image_url", ""),
             Attributes.MEDIA_POSITION: ps.get("position", 0),
             Attributes.MEDIA_DURATION: ps.get("duration", 0),
-            Attributes.MEDIA_TYPE: MediaType.MUSIC,
+            Attributes.MEDIA_TYPE: MediaContentType.MUSIC,
             Attributes.REPEAT: repeat,
             Attributes.SHUFFLE: ps.get("shuffle", 0) == 1,
         })
