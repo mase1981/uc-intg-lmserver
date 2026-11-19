@@ -113,6 +113,8 @@ class LMServerDevice(ExternalClientDevice):
 
             except Exception as err:
                 last_err = err
+                self._stop_polling()
+                await self._client.disconnect()
                 if attempt < CONNECT_RETRIES - 1:
                     _LOG.warning(
                         "[%s] Connect attempt %d/%d failed: %s",
@@ -163,10 +165,14 @@ class LMServerDevice(ExternalClientDevice):
 
     async def _poll_all_players(self) -> None:
         changed = False
+        polled = 0
+        failed = 0
+        last_err: Exception | None = None
         for player_cfg in self._device_config.players:
             pid = player_cfg.get("player_id", "")
             if not pid:
                 continue
+            polled += 1
             try:
                 status = await self._client.get_player_status(pid)
                 old_state = self._player_states.get(pid, {})
@@ -176,13 +182,17 @@ class LMServerDevice(ExternalClientDevice):
                     changed = True
             except Exception as err:
                 _LOG.debug("[%s] Failed to poll player %s: %s", self.log_id, pid, err)
-                if pid in self._player_states:
+                last_err = err
+                failed += 1
+                if pid in self._player_states and self._player_states[pid].get("state") != "unavailable":
                     self._player_states[pid]["state"] = "unavailable"
                     changed = True
-                raise
 
         if changed:
             self.push_update()
+
+        if last_err is not None and failed == polled:
+            raise last_err
 
     def _parse_player_status(self, player_id: str, status: dict[str, Any]) -> dict[str, Any]:
         mode = status.get("mode", "stop")
